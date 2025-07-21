@@ -2,57 +2,19 @@
 
 ####Create script
 cat << 'EOF' > generate_wideip_report.sh
-#!/bin/bash
 
-# Define the output file with a full path and timestamp for unique names
-OUTPUT_FILE="/config/offline_wideips_report_$(date +%Y%m%d%H%M%S).csv"
+CPU Impact Considerations
 
-# Clear existing file and write the CSV header
-echo "WideIP_Name,Status,Total_Requests,WideIP_Type" > "$OUTPUT_FILE"
+With 300+ Wide IPs, this script will be more CPU intensive than if tmsh list gtm wideip full were supported. Each iteration of the while loop will:
 
-# Get a clean list of all Wide IP names AND their types.
-WIDEIP_LIST=$(tmsh list gtm wideip | awk '/gtm wideip/ {print $3" "$4}')
+    Spawn a new tmsh show process.
 
-# Loop through each identified Wide IP type and name
-while read -r WIP_TYPE WIP_NAME; do
-    # Get the detailed information for the current Wide IP, including its type.
-    RAW_TMSH_OUTPUT=$(tmsh show gtm wideip "$WIP_TYPE" "$WIP_NAME" 2>/dev/null)
+    Pipe its output through sed, tr, sed again, grep, and awk.
 
-    # Apply line by line:
-    # 1: Replace non-breaking spaces (NBSP) with regular spaces.
-    # 2: Squeeze multiple regular spaces into single spaces.
-    # 3: Trim leading/trailing regular spaces from EACH LINE.
-    # note DO NOT use 'tr -s' over the whole input to avoid squashing lines.
-    CLEAN_TMSH_OUTPUT=$(echo "$RAW_TMSH_OUTPUT" | \
-                        sed 's/\xc2\xa0/ /g' | \
-                        sed 's/[ ][ ]*/ /g' | \
-                        sed 's/^[ ]*//;s/[ ]*$//')
+This chain of command execution for each Wide IP (300+ times) is where the CPU overhead comes from.
 
-    # Now, grep for the lines. They are still on separate lines.
-    RELEVANT_LINES=$(echo "$CLEAN_TMSH_OUTPUT" | grep -E "^Availability :|^Total ")
+Recommendations for production environment with many Wide IPs:
 
-    # Extract the 'Availability' status.
-    # Now it should be able to match from the beginning of a line.
-    STATUS=$(echo "$RELEVANT_LINES" | awk -F':' '/^Availability :/ {print $2}')
+    Schedule During Off-Peak Hours: If possible, run this script during times when your F5 BIG-IP system is under lower load.
 
-    # Extract the 'Total' requests.
-    TOTAL_REQUESTS=$(echo "$RELEVANT_LINES" | awk '/^Total / {print $NF}')
-
-    # If Total_Requests field is empty or non-numeric, default it to 0.
-    if ! [[ "$TOTAL_REQUESTS" =~ ^[0-9]+$ ]]; then
-        TOTAL_REQUESTS=0
-    fi
-
-    # STATUS_TRIMMED should already be clean, but for safety:
-    STATUS_TRIMMED=$(echo "$STATUS" | sed 's/^[ ]*//;s/[ ]*$//')
-
-    # Condition: Check if the Wide IP's Availability status = "offline".
-    if [[ "$STATUS_TRIMMED" == *offline* ]]; then
-        # If the condition is met, append the Wide IP's details to the CSV file.
-        echo "$WIP_NAME,$STATUS_TRIMMED,$TOTAL_REQUESTS,$WIP_TYPE" >> "$OUTPUT_FILE"
-    fi
-done <<< "$WIDEIP_LIST"
-
-#post file export location
-echo "Output saved to $OUTPUT_FILE"
-EOF
+    Monitor Performance: Keep an eye on the F5's CPU and memory usage when the script is running for the first time with a large number of Wide IPs.
