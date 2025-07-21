@@ -1,3 +1,4 @@
+cat << 'EOF' > generate_wideip_report.sh
 #!/bin/bash
 
 # Define the output file with a full path and timestamp for unique names
@@ -18,8 +19,8 @@ BEGIN {
     current_type = "";
     current_status = "";
     current_total_requests = 0;
-    
-    # Define arrays for mapping statuses if needed (though not strictly used for filtering 'offline')
+
+    # Define arrays for mapping statuses if needed (though not strictly used for filtering \'offline\')
     # status_map["Availability : offline"] = "offline";
 }
 
@@ -29,9 +30,9 @@ BEGIN {
     if (current_name != "" && current_status ~ /offline/) {
         print current_name "," current_status "," current_total_requests "," current_type;
     }
-    
+
     # Reset for the new Wide IP
-    current_type = $3; # e.g., 'a', 'cname'
+    current_type = $3; # e.g., \'a\', \'cname\'
     current_name = $4; # The Wide IP name
     current_status = "";
     current_total_requests = 0;
@@ -64,3 +65,4 @@ END {
 }' >> "$OUTPUT_FILE"
 
 echo "Output saved to $OUTPUT_FILE"
+EOF
